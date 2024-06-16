@@ -6,3 +6,4 @@ static/vars.py
 django_project/settings.py
 scripts/migrate.py
 scripts/load.load
+backup.dump
