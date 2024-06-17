@@ -10,9 +10,10 @@ from posts.serializers import PostsSerializer
 from posts.views import format_local_post, format_local_post_from_db, get_object_type
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
-from rest_framework.decorators import api_view, authentication_classes, permission_classes
+from rest_framework.decorators import api_view, authentication_classes, permission_classes, renderer_classes
 from rest_framework.authentication import BasicAuthentication
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.renderers import TemplateHTMLRenderer, JSONRenderer
 from accounts.models import AuthorUser, FollowRequests, ForeignAuthor
 from static.vars import ENDPOINT, HOSTS
 from .models import Inbox
@@ -114,12 +115,13 @@ def inbox_post(request, author_id, inbox_index):
 def inbox_view(request):
     # inbox
     author_cache = AuthorCache()
+    emptyInbox = False
 
     try: author = AuthorUser.objects.get(uuid=request.user.uuid)
-    except: return Response(status=404)
+    except: return render(request, 'errorPage.html', {'errorCode': "404 Author not found"})
     
     try: inbox = Inbox.objects.get(author=author)
-    except: return Response(status=404)
+    except: emptyInbox = True
 
     posts = []
     likes = []
@@ -128,54 +130,55 @@ def inbox_view(request):
 
     index = 0
 
-    for item in inbox.items:
-        print(item)
-        
-        data = None
-        if item.get("sender"):
-            data = author_cache.get(item["sender"]["uuid"])
-
-        if not data:
-            data = {"displayName": "An Unknown Remote Author", 
-                    "profileImage": "https://t3.ftcdn.net/jpg/05/71/08/24/360_F_571082432_Qq45LQGlZsuby0ZGbrd79aUTSQikgcgc.jpg"}
+    if not emptyInbox:
+        for item in inbox.items:
+            print(item)
             
-        if item["type"] == "post":
-            try: post = Posts.objects.get(uuid=item["id"])
-            except: continue
+            data = None
+            if item.get("sender"):
+                data = author_cache.get(item["sender"]["uuid"])
 
-            author_data = author_cache.get(post.author_uuid)
-            post_data = format_local_post_from_db(post)
-            post_data["index"] = index
-            post_data["author"] = author_data
-            posts.append(post_data)
+            if not data:
+                data = {"displayName": "An Unknown Remote Author", 
+                        "profileImage": "https://t3.ftcdn.net/jpg/05/71/08/24/360_F_571082432_Qq45LQGlZsuby0ZGbrd79aUTSQikgcgc.jpg"}
+                
+            if item["type"] == "post":
+                try: post = Posts.objects.get(uuid=item["id"])
+                except: continue
 
-        elif item["type"] == "like":
-            try: like = Likes.objects.get(id=item["id"])
-            except: continue
+                author_data = author_cache.get(post.author_uuid)
+                post_data = format_local_post_from_db(post)
+                post_data["index"] = index
+                post_data["author"] = author_data
+                posts.append(post_data)
 
-            like_data = model_to_dict(like)
-            like_data["index"] = index
-            like_data["author"] = data
-            likes.append(like_data)
+            elif item["type"] == "like":
+                try: like = Likes.objects.get(id=item["id"])
+                except: continue
 
-        elif item["type"] == "comment":
-            try: comment = Comments.objects.get(uuid=item["id"])
-            except: continue
+                like_data = model_to_dict(like)
+                like_data["index"] = index
+                like_data["author"] = data
+                likes.append(like_data)
 
-            comment_data = model_to_dict(comment)
-            comment_data["index"] = index
-            comment_data["author"] = data
-            comments.append(comment_data)
+            elif item["type"] == "comment":
+                try: comment = Comments.objects.get(uuid=item["id"])
+                except: continue
 
-        elif item["type"] == "follow":
-            try: fq = FollowRequests.objects.get(id=item["id"])
-            except: continue
+                comment_data = model_to_dict(comment)
+                comment_data["index"] = index
+                comment_data["author"] = data
+                comments.append(comment_data)
 
-            requester = model_to_dict(fq)
-            requester["author"] = data
-            requests.append(requester)
-        
-        index += 1
+            elif item["type"] == "follow":
+                try: fq = FollowRequests.objects.get(id=item["id"])
+                except: continue
+
+                requester = model_to_dict(fq)
+                requester["author"] = data
+                requests.append(requester)
+            
+            index += 1
     
     return render(request, 'inbox.html', {'requests_list': requests, 'posts': posts, 'likes': likes, 'comments': comments})
 
@@ -221,6 +224,7 @@ class InboxItem():
 @api_view(['GET', 'POST', 'DELETE'])
 @authentication_classes([BasicAuthentication])
 @permission_classes([IsAuthenticated])
+@renderer_classes((TemplateHTMLRenderer,JSONRenderer))
 def api_inbox(request, uuid):
     author_cache = AuthorCache()
     try:

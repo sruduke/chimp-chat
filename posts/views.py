@@ -650,8 +650,6 @@ def open_comments_handler(request):
         return JsonResponse({'error': 'feature-not-supported'}, status=501)
     if post_host.endswith('/'): post_host = post_host[:-1] #Safety for trailing /
 
-    comments = []
-
     full_url = f"{post['origin']}/comments/"
     headers = {
         "accept": "application/json",
@@ -662,12 +660,15 @@ def open_comments_handler(request):
     }
     auth = nodes.get_auth_for_host(post_host)
     response = requests.get(full_url, headers=headers, auth=HTTPBasicAuth(auth[0], auth[1]), params=params)
-    returned_comments = response.json()
-    for comment in returned_comments['comments']:
-        comments.append(comment)
+    response_json = response.json()
+
+    comment_list = response_json.get('comments')
+    comments = comment_list if comment_list is not None else []
 
     if response.ok:
         return JsonResponse({'comments': json.dumps(comments)}) #Let the frontend display comments
+    else:
+        return JsonResponse({'comments': json.dumps([])})
 
 def submit_comment_handler(request):
     nodes = Nodes()
@@ -705,6 +706,8 @@ def submit_comment_handler(request):
 
     if response.ok:
         return JsonResponse({'comments': json.dumps([comment_details])})
+    else:
+        return JsonResponse({'comments': json.dumps([])})
 
 def get_object_type(url):
     sections = url.split("/")
