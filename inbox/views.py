@@ -224,7 +224,7 @@ class InboxItem():
 @api_view(['GET', 'POST', 'DELETE'])
 @authentication_classes([BasicAuthentication])
 @permission_classes([IsAuthenticated])
-@renderer_classes((TemplateHTMLRenderer,JSONRenderer))
+@renderer_classes([JSONRenderer])
 def api_inbox(request, uuid):
     author_cache = AuthorCache()
     try:
